@@ -14,10 +14,11 @@ declare(strict_types=1);
 
 namespace MaplePHP\Emitron;
 
-use MaplePHP\Http\ResponseFactory;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamInterface;
-use MaplePHP\Log\InvalidArgumentException;
+use MaplePHP\Emitron\Enums\DispatchCodes;
+use MaplePHP\Http\ResponseFactory;
 
 class Kernel extends AbstractKernel
 {
@@ -30,17 +31,18 @@ class Kernel extends AbstractKernel
      */
     public function run(ServerRequestInterface $request, ?StreamInterface $stream = null): void
     {
-
         $this->dispatchConfig->getRouter()->dispatch(function ($data, $args, $middlewares) use ($request, $stream) {
 
+
+	        $dispatchCode = (int)($data[0] ?? DispatchCodes::FOUND->value);
+	        if($dispatchCode !== DispatchCodes::FOUND->value) {
+		        $data['handler'] = function (ServerRequestInterface $req, ResponseInterface $res): ResponseInterface
+		        {
+			        return $res->withStatus(404);
+		        };
+	        }
             //$dispatchCode = $data[0] ?? RouterDispatcher::FOUND;
-
             [$data, $args, $middlewares] = $this->reMap($data, $args, $middlewares);
-
-            if (!isset($data['handler'])) {
-                throw new InvalidArgumentException("Missing 'handler' key.");
-            }
-
 
             $this->container->set("request", $request);
             $this->container->set("args", $args);
@@ -50,23 +52,12 @@ class Kernel extends AbstractKernel
             $factory = new ResponseFactory($bodyStream);
             $finalHandler = new ControllerRequestHandler($factory, $data['handler'] ?? []);
 
-
             $response = $this->initRequestHandler(
                 request: $request,
                 stream: $bodyStream,
                 finalHandler: $finalHandler,
                 middlewares: $middlewares
             );
-
-            /*
-            if ($dispatchCode === Dispatcher::NOT_FOUND) {
-                $response = $response->withStatus(404);
-            }
-
-            if ($dispatchCode === Dispatcher::METHOD_NOT_ALLOWED) {
-                $response = $response->withStatus(405);
-            }
-             */
 
             $this->createEmitter()->emit($response, $request);
         });
@@ -84,6 +75,10 @@ class Kernel extends AbstractKernel
         if (!is_array($middlewares)) {
             $middlewares = [];
         }
+
+	    if (!is_array($args)) {
+		    $args = [];
+	    }
         return [$data, $args, $middlewares];
     }
 }

@@ -14,6 +14,9 @@ abstract class AbstractConfigProps implements ConfigPropsInterface
     public ?string $path = null;
     public ?string $test = null;
 
+	private array $propDesc = [];
+	private static array $childPropCache = [];
+
     /**
      * Hydrate the properties/object with expected data, and handle unexpected data
      *
@@ -66,6 +69,32 @@ abstract class AbstractConfigProps implements ConfigPropsInterface
         return $this;
     }
 
+
+	/**
+	 * Add description to prop
+	 *
+	 * @param string $key
+	 * @param string $desc
+	 * @return $this
+	 */
+	protected function setPropDesc(string $key, string $desc): self
+	{
+		$this->propDesc[$key] = $desc;
+		return $this;
+	}
+
+	/**
+	 * Get description to prop
+	 *
+	 * @param string $key
+	 * @param string $desc
+	 * @return string
+	 */
+	public function getPropDesc(string $key): string
+	{
+		return $this->propDesc[$key] ?? "";
+	}
+
     /**
      * Set multiple config props
      *
@@ -101,15 +130,22 @@ abstract class AbstractConfigProps implements ConfigPropsInterface
         return ($newKey !== false) ? $this->{$newKey} : null;
     }
 
-    /**
-     * Return props object as array
-     *
-     * @return array
-     */
-    public function toArray(): array
-    {
-        return get_object_vars($this);
-    }
+	/**
+	 * Return public properties defined on the concrete class
+	 */
+	public function toArray(): array
+	{
+		$vars = get_object_vars($this);
+
+		if (!isset(self::$childPropCache[static::class])) {
+			$childDefaults = get_class_vars(static::class);
+			$baseDefaults = get_class_vars(self::class);
+
+			self::$childPropCache[static::class] = array_diff_key($childDefaults, $baseDefaults);
+		}
+
+		return array_intersect_key($vars, self::$childPropCache[static::class]);
+	}
 
     /**
      * Get value as bool value
