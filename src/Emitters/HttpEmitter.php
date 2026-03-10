@@ -25,19 +25,20 @@ class HttpEmitter implements EmitterInterface
         $body = $response->getBody();
         $status = $response->getStatusCode();
         $method = strtoupper($request->getMethod());
-        $skipBody = in_array($status, [204, 304]) || ($status >= 100 && $status < 200) || $method === 'HEAD';
+        $skipBody = in_array($status, [204, 304], true)
+	        || ($status >= 100 && $status < 200)
+	        || $method === 'HEAD';
 
-        // Default to 204 No Content if nobody was written
-        if (!$response->getBody()->getSize() && $this->isSuccessfulResponse()) {
-            $response = $response->withStatus(204);
-            $response->getBody()->write("No Content\n");
-        }
-
+	    // Create headers
         $this->createHeaders($response);
-        if (!$skipBody && $body->isSeekable()) {
-            $body->rewind();
-        }
-        echo $skipBody ? '' : $body->getContents();
+
+	    // Detach body if HEAD or other detachable status code
+	    if (!$skipBody) {
+		    if ($body->isSeekable()) {
+			    $body->rewind();
+		    }
+		    echo $body->getContents();
+	    }
     }
 
     /**

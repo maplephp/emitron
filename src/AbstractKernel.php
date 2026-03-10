@@ -15,17 +15,20 @@ declare(strict_types=1);
 namespace MaplePHP\Emitron;
 
 use MaplePHP\Container\Reflection;
+use MaplePHP\Emitron\Contracts\AppInterface;
 use MaplePHP\Emitron\Contracts\DispatchConfigInterface;
 use MaplePHP\Emitron\Contracts\EmitterInterface;
 use MaplePHP\Emitron\Contracts\KernelInterface;
 use MaplePHP\Emitron\Emitters\CliEmitter;
 use MaplePHP\Emitron\Emitters\HttpEmitter;
+use MaplePHP\Http\Interfaces\PathInterface;
 use MaplePHP\Http\ResponseFactory;
 use MaplePHP\Http\Stream;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 
 abstract class AbstractKernel implements KernelInterface
 {
@@ -118,6 +121,7 @@ abstract class AbstractKernel implements KernelInterface
      *
      * @param ServerRequestInterface $request
      * @param StreamInterface $stream
+     * @param RequestHandlerInterface $finalHandler
      * @param array $middlewares
      * @return ResponseInterface
      * @throws \ReflectionException
@@ -125,17 +129,33 @@ abstract class AbstractKernel implements KernelInterface
     protected function initRequestHandler(
         ServerRequestInterface $request,
         StreamInterface $stream,
+        PathInterface $path,
+        RequestHandlerInterface $finalHandler,
         array $middlewares = []
-    ) : ResponseInterface {
-        $factory = new ResponseFactory($stream);
+    ): ResponseInterface {
+
         $this->bindInterfaces([
-            "ContainerInterface" => $this->container, "RequestInterface" => $request,
-            "ServerRequestInterface" => $request, "StreamInterface" => $stream,
+            "ContainerInterface" => $this->container,
+            "RequestInterface" => $request,
+            "ServerRequestInterface" => $request,
+            "StreamInterface" => $stream,
+	        "PathInterface" => $path
         ]);
+
         $middlewares = array_merge($this->userMiddlewares, $middlewares);
-        $handler = new RequestHandler($middlewares, $factory);
-        $response = $handler->handle($request);
-        $this->bindInterfaces(["ResponseInterface" => $response]);
+        $handler = new RequestHandler($middlewares, $finalHandler);
+	    $app = $this->container->has("app") ? $this->container->get("app") : null;
+
+	    ob_start();
+	    $response = $handler->handle($request);
+	    $output = ob_get_clean();
+
+	    if((string)$output !== "" && ($app instanceof AppInterface && !$app->isProd())) {
+		    throw new \RuntimeException(
+			    'Unexpected output detected during request dispatch. Controllers must write to the response body instead of using echo.'
+		    );
+	    }
+
         return $response;
     }
 

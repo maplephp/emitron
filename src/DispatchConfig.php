@@ -15,27 +15,64 @@ declare(strict_types=1);
 namespace MaplePHP\Emitron;
 
 use Exception;
+use MaplePHP\Emitron\Configs\ConfigPropsFactory;
 use MaplePHP\Emitron\Contracts\ConfigPropsInterface;
 use MaplePHP\Emitron\Contracts\DispatchConfigInterface;
-use MaplePHP\Unitary\Config\ConfigProps;
-use MaplePHP\Unitary\Interfaces\RouterDispatchInterface;
-use MaplePHP\Unitary\Interfaces\RouterInterface;
+use MaplePHP\Unitary\Interfaces\RouterDispatchInterface as UnitaryRouterDispatchInterface;
+use MaplePHP\Unitary\Interfaces\RouterInterface as UnitaryRouterInterface;
+use MaplePHP\Emitron\Contracts\RouterInterface;
+use MaplePHP\Emitron\Contracts\RouterDispatchInterface;
 
 class DispatchConfig implements DispatchConfigInterface
 {
     private string $dir;
-    private ?RouterInterface $router = null;
+    private RouterInterface|UnitaryRouterInterface|null $router = null;
     protected ConfigPropsInterface $props;
+	protected ?string $configPropClass = null;
 
-    /**
-     * @param string|ConfigPropsInterface|null $props
-     * @throws Exception
-     */
-    public function __construct(string|null|ConfigPropsInterface $props = null)
+	/**
+	 * @param string|ConfigPropsInterface|null $props
+	 * @param string|null $configPropClass
+	 * @throws Exception
+	 */
+    public function __construct(string|null|ConfigPropsInterface $props = null, ?string $configPropClass = null)
     {
+	    $this->configPropClass = $configPropClass;
         if (!($props instanceof ConfigPropsInterface)) {
             $this->loadConfigFile(($props === null) ? __DIR__ . '/../emitron.config.php' : $props);
         }
+    }
+
+	/**
+	 * Get used config prop class as string
+	 *
+	 * @return string|null
+	 */
+	public function getConfigPropsClass(): ?string
+	{
+		return $this->configPropClass;
+	}
+
+    /**
+     * Get config value
+     *
+     * @param string $key
+     * @return mixed
+     */
+    public function get(string $key): mixed
+    {
+        return $this->props->{$key};
+    }
+
+    /**
+     * Check if config prop exists
+     *
+     * @param string $key
+     * @return bool
+     */
+    public function has(string $key): bool
+    {
+        return isset($this->props->{$key});
     }
 
     /**
@@ -78,12 +115,12 @@ class DispatchConfig implements DispatchConfigInterface
     /**
      * Get current exit code as int or null if not set
      *
-     * @return RouterDispatchInterface
+     * @return UnitaryRouterInterface|RouterDispatchInterface
      */
-    public function getRouter(): RouterDispatchInterface
+    public function getRouter(): UnitaryRouterInterface|RouterDispatchInterface
     {
         if ($this->router === null) {
-            return new class () implements RouterDispatchInterface {
+            return new class () implements UnitaryRouterDispatchInterface, RouterDispatchInterface {
                 public function dispatch(callable $call): bool
                 {
                     $call(['handler' => []], [], [], '');
@@ -105,7 +142,7 @@ class DispatchConfig implements DispatchConfigInterface
     {
         $inst = clone $this;
         $inst->router = $call($this->dir);
-        if (!($inst->router instanceof RouterInterface)) {
+        if (!($inst->router instanceof RouterInterface || $inst->router instanceof UnitaryRouterInterface)) {
             throw new Exception('Router must implement RouterInterface and "return" a it!');
         }
         return $inst;
@@ -131,9 +168,9 @@ class DispatchConfig implements DispatchConfigInterface
         if (!is_array($config)) {
             throw new Exception('The config file do not return a array');
         }
-
+		
         //$this->dir = realpath(dirname($path));
         $this->dir = AbstractKernel::getRouterFilePath();
-        $this->props = new ConfigProps($config);
+        $this->props = ConfigPropsFactory::create($config, $this->configPropClass);
     }
 }

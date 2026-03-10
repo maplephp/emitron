@@ -14,11 +14,12 @@ declare(strict_types=1);
 
 namespace MaplePHP\Emitron;
 
-use MaplePHP\Container\Reflection;
+use MaplePHP\Http\Path;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamInterface;
-use MaplePHP\Log\InvalidArgumentException;
+use MaplePHP\Emitron\Enums\DispatchCodes;
+use MaplePHP\Http\ResponseFactory;
 
 class Kernel extends AbstractKernel
 {
@@ -33,34 +34,57 @@ class Kernel extends AbstractKernel
     {
         $this->dispatchConfig->getRouter()->dispatch(function ($data, $args, $middlewares) use ($request, $stream) {
 
-            if (!isset($data['handler'])) {
-                throw new InvalidArgumentException("The router dispatch method arg 1 is missing the 'handler' key.");
-            }
+
+	        $parts = isset($data[2]) && is_array($data[2]) ? $data[2] : [];
+	        $dispatchCode = (int)($data[0] ?? DispatchCodes::FOUND->value);
+
+
+	        if($dispatchCode !== DispatchCodes::FOUND->value) {
+		        $data['handler'] = function (ServerRequestInterface $req, ResponseInterface $res): ResponseInterface
+		        {
+			        return $res->withStatus(404);
+		        };
+	        }
+            //$dispatchCode = $data[0] ?? RouterDispatcher::FOUND;
+            [$data, $args, $middlewares] = $this->reMap($data, $args, $middlewares);
 
             $this->container->set("request", $request);
             $this->container->set("args", $args);
             $this->container->set("configuration", $this->getDispatchConfig());
 
-            $response = $this->initRequestHandler($request, $this->getBody($stream), $middlewares);
+            $bodyStream = $this->getBody($stream);
+            $factory = new ResponseFactory($bodyStream);
+            $finalHandler = new ControllerRequestHandler($factory, $data['handler'] ?? []);
+			$path = new Path($parts, $request);
 
-            $controller = $data['handler'];
-            if (!isset($controller[1])) {
-                $controller[1] = '__invoke';
-            }
-            if (count($controller) === 2) {
-                [$class, $method] = $controller;
-                if (method_exists($class, $method)) {
-                    $reflect = new Reflection($class);
-                    $classInst = $reflect->dependencyInjector();
-                    // Can replace the active Response instance through Command instance
-                    $hasNewResponse = $reflect->dependencyInjector($classInst, $method);
-                    $response = ($hasNewResponse instanceof ResponseInterface) ? $hasNewResponse : $response;
 
-                } else {
-                    $response->getBody()->write("\nERROR: Could not load Controller class {$class} and method {$method}()\n");
-                }
-            }
+            $response = $this->initRequestHandler(
+                request: $request,
+                stream: $bodyStream,
+				path: $path,
+                finalHandler: $finalHandler,
+                middlewares: $middlewares
+            );
             $this->createEmitter()->emit($response, $request);
         });
+    }
+
+
+    function reMap($data, $args, $middlewares)
+    {
+        if (isset($data[1]) && $middlewares instanceof ServerRequestInterface) {
+            $item = $data[1];
+            return [
+                ["handler" => $item['controller']], $_REQUEST, ($item['data'] ?? [])
+            ];
+        }
+        if (!is_array($middlewares)) {
+            $middlewares = [];
+        }
+
+	    if (!is_array($args)) {
+		    $args = [];
+	    }
+        return [$data, $args, $middlewares];
     }
 }
