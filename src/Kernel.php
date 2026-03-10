@@ -34,10 +34,12 @@ class Kernel extends AbstractKernel
     {
         $this->dispatchConfig->getRouter()->dispatch(function ($data, $args, $middlewares) use ($request, $stream) {
 
+	        if($args === null) {
+		        $args = $request->getCliArgs();
+	        }
 
 	        $parts = isset($data[2]) && is_array($data[2]) ? $data[2] : [];
 	        $dispatchCode = (int)($data[0] ?? DispatchCodes::FOUND->value);
-
 
 	        if($dispatchCode !== DispatchCodes::FOUND->value) {
 		        $data['handler'] = function (ServerRequestInterface $req, ResponseInterface $res): ResponseInterface
@@ -75,13 +77,12 @@ class Kernel extends AbstractKernel
         if (isset($data[1]) && $middlewares instanceof ServerRequestInterface) {
             $item = $data[1];
             return [
-                ["handler" => $item['controller']], $_REQUEST, ($item['data'] ?? [])
+                ["handler" => $item['controller']], ($args == null ? $_REQUEST : $args), ($item['data'] ?? [])
             ];
         }
         if (!is_array($middlewares)) {
             $middlewares = [];
         }
-
 	    if (!is_array($args)) {
 		    $args = [];
 	    }
