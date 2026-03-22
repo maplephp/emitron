@@ -23,69 +23,69 @@ use MaplePHP\Http\ResponseFactory;
 
 class Kernel extends AbstractKernel
 {
-    /**
-     * Run the emitter and init all routes, middlewares and configs
-     *
-     * @param ServerRequestInterface $request
-     * @param StreamInterface|null $stream
-     * @return void
-     */
-    public function run(ServerRequestInterface $request, ?StreamInterface $stream = null): void
-    {
-        $this->dispatchConfig->getRouter()->dispatch(function ($data, $args, $middlewares) use ($request, $stream) {
+	/**
+	 * Run the emitter and init all routes, middlewares and configs
+	 *
+	 * @param ServerRequestInterface $request
+	 * @param StreamInterface|null $stream
+	 * @param callable|null $call
+	 * @return void
+	 */
+	public function run(ServerRequestInterface $request, ?StreamInterface $stream = null, ?callable $call = null): void
+	{
+		$this->dispatchConfig->getRouter()->dispatch(function ($data, $args, $middlewares) use ($request, $stream, $call) {
 
-	        if($args === null) {
-		        $args = $request->getCliArgs();
-	        }
+			if ($args === null) {
+				$args = $request->getCliArgs();
+			}
 
-	        $parts = isset($data[2]) && is_array($data[2]) ? $data[2] : [];
-	        $dispatchCode = (int)($data[0] ?? DispatchCodes::FOUND->value);
+			$parts = isset($data[2]) && is_array($data[2]) ? $data[2] : [];
+			$dispatchCode = (int)($data[0] ?? DispatchCodes::FOUND->value);
 
-	        if($dispatchCode !== DispatchCodes::FOUND->value) {
-		        $data['handler'] = function (ServerRequestInterface $req, ResponseInterface $res): ResponseInterface
-		        {
-			        return $res->withStatus(404);
-		        };
-	        }
-            //$dispatchCode = $data[0] ?? RouterDispatcher::FOUND;
-            [$data, $args, $middlewares] = $this->reMap($data, $args, $middlewares);
+			if ($dispatchCode !== DispatchCodes::FOUND->value) {
+				$data['handler'] = function (ServerRequestInterface $req, ResponseInterface $res): ResponseInterface {
+					return $res->withStatus(404);
+				};
+			}
+			//$dispatchCode = $data[0] ?? RouterDispatcher::FOUND;
+			[$data, $args, $middlewares] = $this->reMap($data, $args, $middlewares);
 
-            $this->container->set("request", $request);
-            $this->container->set("args", $args);
-            $this->container->set("configuration", $this->getDispatchConfig());
+			$this->container->set("request", $request);
+			$this->container->set("args", $args);
+			$this->container->set("configuration", $this->getDispatchConfig());
 
-            $bodyStream = $this->getBody($stream);
-            $factory = new ResponseFactory($bodyStream);
-            $finalHandler = new ControllerRequestHandler($factory, $data['handler'] ?? []);
+			$bodyStream = $this->getBody($stream);
+			$factory = new ResponseFactory($bodyStream);
+			$finalHandler = new ControllerRequestHandler($factory, $data['handler'] ?? [], $call);
 			$path = new Path($parts, $request);
 
-
-            $response = $this->initRequestHandler(
-                request: $request,
-                stream: $bodyStream,
+			$response = $this->initRequestHandler(
+				request: $request,
+				stream: $bodyStream,
 				path: $path,
-                finalHandler: $finalHandler,
-                middlewares: $middlewares
-            );
-            $this->createEmitter()->emit($response, $request);
-        });
-    }
+				finalHandler: $finalHandler,
+				middlewares: $middlewares
+			);
+
+			$this->createEmitter()->emit($response, $request);
+		});
+	}
 
 
-    function reMap($data, $args, $middlewares)
-    {
-        if (isset($data[1]) && $middlewares instanceof ServerRequestInterface) {
-            $item = $data[1];
-            return [
-                ["handler" => $item['controller']], ($args == null ? $_REQUEST : $args), ($item['data'] ?? [])
-            ];
-        }
-        if (!is_array($middlewares)) {
-            $middlewares = [];
-        }
-	    if (!is_array($args)) {
-		    $args = [];
-	    }
-        return [$data, $args, $middlewares];
-    }
+	function reMap($data, $args, $middlewares)
+	{
+		if (isset($data[1]) && $middlewares instanceof ServerRequestInterface) {
+			$item = $data[1];
+			return [
+				["handler" => $item['controller']], ($args == null ? $_REQUEST : $args), ($item['data'] ?? [])
+			];
+		}
+		if (!is_array($middlewares)) {
+			$middlewares = [];
+		}
+		if (!is_array($args)) {
+			$args = [];
+		}
+		return [$data, $args, $middlewares];
+	}
 }
