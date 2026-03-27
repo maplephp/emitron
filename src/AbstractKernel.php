@@ -22,7 +22,6 @@ use MaplePHP\Emitron\Contracts\KernelInterface;
 use MaplePHP\Emitron\Emitters\CliEmitter;
 use MaplePHP\Emitron\Emitters\HttpEmitter;
 use MaplePHP\Http\Interfaces\PathInterface;
-use MaplePHP\Http\ResponseFactory;
 use MaplePHP\Http\Stream;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -32,178 +31,184 @@ use Psr\Http\Server\RequestHandlerInterface;
 
 abstract class AbstractKernel implements KernelInterface
 {
-    public const CONFIG_FILE_PATH = __DIR__ . '/../emitron.config.php';
-    protected static ?string $configFilePath = null;
-    protected static ?string $routerFilePath = null;
-    protected ContainerInterface $container;
-    protected array $userMiddlewares;
-    protected ?DispatchConfigInterface $dispatchConfig = null;
-    protected array $config = [];
+	public const CONFIG_FILE_PATH = __DIR__ . '/../emitron.config.php';
+	protected static ?string $configFilePath = null;
+	protected static ?string $routerFilePath = null;
+	protected ContainerInterface $container;
+	protected array $userMiddlewares;
+	protected ?DispatchConfigInterface $dispatchConfig = null;
+	protected array $config = [];
 
-    /**
-     * @param ContainerInterface $container
-     * @param array $userMiddlewares
-     * @param DispatchConfigInterface|null $dispatchConfig
-     * @throws \Exception
-     */
-    public function __construct(
-        ContainerInterface $container,
-        array $userMiddlewares = [],
-        ?DispatchConfigInterface $dispatchConfig = null,
-    ) {
-        $this->userMiddlewares = $userMiddlewares;
-        $this->container = $container;
-        $this->dispatchConfig = ($dispatchConfig === null) ?
-            new DispatchConfig(static::getConfigFilePath()) : $dispatchConfig;
-    }
+	/**
+	 * @param ContainerInterface $container
+	 * @param array $userMiddlewares
+	 * @param DispatchConfigInterface|null $dispatchConfig
+	 * @throws \Exception
+	 */
+	public function __construct(
+		ContainerInterface       $container,
+		array                    $userMiddlewares = [],
+		?DispatchConfigInterface $dispatchConfig = null,
+	)
+	{
+		$this->userMiddlewares = $userMiddlewares;
+		$this->container = $container;
+		$this->dispatchConfig = ($dispatchConfig === null) ?
+			new DispatchConfig(static::getConfigFilePath()) : $dispatchConfig;
+	}
 
-    /**
-     * Makes it easy to specify a config file inside a custom kernel file
-     *
-     * @param string|null $path
-     * @return void
-     */
-    public static function setConfigFilePath(?string $path): void
-    {
-        static::$configFilePath = $path;
-    }
+	/**
+	 * Makes it easy to specify a config file inside a custom kernel file
+	 *
+	 * @param string|null $path
+	 * @return void
+	 */
+	public static function setConfigFilePath(?string $path): void
+	{
+		static::$configFilePath = $path;
+	}
 
-    /**
-     * Get expected config file
-     *
-     * @return string
-     */
-    public static function getConfigFilePath(): string
-    {
-        if (static::$configFilePath === null) {
-            return static::CONFIG_FILE_PATH;
-        }
-        return static::$configFilePath;
-    }
+	/**
+	 * Get expected config file
+	 *
+	 * @return string
+	 */
+	public static function getConfigFilePath(): string
+	{
+		if (static::$configFilePath === null) {
+			return static::CONFIG_FILE_PATH;
+		}
+		return static::$configFilePath;
+	}
 
-    /**
-     * Set router path
-     *
-     * @param string|null $path
-     * @return void
-     */
-    public static function setRouterFilePath(?string $path): void
-    {
-        static::$routerFilePath = $path;
-    }
+	/**
+	 * Set router path
+	 *
+	 * @param string|null $path
+	 * @return void
+	 */
+	public static function setRouterFilePath(?string $path): void
+	{
+		static::$routerFilePath = $path;
+	}
 
-    /**
-     * Get router path
-     *
-     * @return string
-     */
-    public static function getRouterFilePath(): string
-    {
-        if(static::$routerFilePath === null) {
-            return realpath(dirname(self::getConfigFilePath()));
-        }
-        return static::$routerFilePath;
-    }
+	/**
+	 * Get router path
+	 *
+	 * @return string
+	 */
+	public static function getRouterFilePath(): string
+	{
+		if (static::$routerFilePath === null) {
+			return realpath(dirname(self::getConfigFilePath()));
+		}
+		return static::$routerFilePath;
+	}
 
-    /**
-     * Get config instance for configure dispatch result
-     *
-     * @return DispatchConfigInterface
-     */
-    public function getDispatchConfig(): DispatchConfigInterface
-    {
-        return $this->dispatchConfig;
-    }
+	/**
+	 * Get config instance for configure dispatch result
+	 *
+	 * @return DispatchConfigInterface
+	 */
+	public function getDispatchConfig(): DispatchConfigInterface
+	{
+		return $this->dispatchConfig;
+	}
 
-    /**
-     * Will initialize the request handler with default
-     * functionality that you would want.
-     *
-     * @param ServerRequestInterface $request
-     * @param StreamInterface $stream
-     * @param RequestHandlerInterface $finalHandler
-     * @param array $middlewares
-     * @return ResponseInterface
-     * @throws \ReflectionException
-     */
-    protected function initRequestHandler(
-        ServerRequestInterface $request,
-        StreamInterface $stream,
-        PathInterface $path,
-        RequestHandlerInterface $finalHandler,
-        array $middlewares = []
-    ): ResponseInterface {
+	/**
+	 * Will initialize the request handler with default
+	 * functionality that you would want.
+	 *
+	 * @param ServerRequestInterface $request
+	 * @param StreamInterface $stream
+	 * @param RequestHandlerInterface $finalHandler
+	 * @param array $middlewares
+	 * @return ResponseInterface
+	 * @throws \ReflectionException
+	 */
+	protected function initRequestHandler(
+		ServerRequestInterface  $request,
+		StreamInterface         $stream,
+		PathInterface           $path,
+		RequestHandlerInterface $finalHandler,
+		array                   $middlewares = []
+	): ResponseInterface
+	{
 
-        $this->bindInterfaces([
-            "ContainerInterface" => $this->container,
-            "RequestInterface" => $request,
-            "ServerRequestInterface" => $request,
-            "StreamInterface" => $stream,
-	        "PathInterface" => $path
-        ]);
+		$this->bindInterfaces([
+			"ContainerInterface" => $this->container,
+			"RequestInterface" => $request,
+			"ServerRequestInterface" => $request,
+			"StreamInterface" => $stream,
+			"PathInterface" => fn() => $path
+		]);
 
-        $middlewares = array_merge($this->userMiddlewares, $middlewares);
-        $handler = new RequestHandler($middlewares, $finalHandler);
-	    $app = $this->container->has("app") ? $this->container->get("app") : null;
+		$middlewares = array_merge($this->userMiddlewares, $middlewares);
+		$handler = new RequestHandler($middlewares, $finalHandler);
+		$app = $this->container->has("app") ? $this->container->get("app") : null;
 
-	    ob_start();
-	    $response = $handler->handle($request);
-	    $output = ob_get_clean();
+		ob_start();
+		$response = $handler->handle($request);
+		$output = ob_get_clean();
 
-	    if((string)$output !== "" && ($app instanceof AppInterface && !$app->isProd())) {
-		    throw new \RuntimeException(
-			    'Unexpected output detected during request dispatch. Controllers must write to the response body instead of using echo.'
-		    );
-	    }
+		if ((string)$output !== "" && ($app instanceof AppInterface && !$app->isProd())) {
+			throw new \RuntimeException(
+				'Unexpected output detected during request dispatch. Controllers must write to the response body instead of using echo.'
+			);
+		}
 
-        return $response;
-    }
+		return $response;
+	}
 
-    /**
-     * Bind instances (singletons) to interface classes so they can be resolved
-     * through the dependency injector.
-     *
-     * @param array<string, object> $bindings
-     * @return void
-     */
-    protected function bindInterfaces(array $bindings): void
-    {
-        Reflection::interfaceFactory(function (string $className) use ($bindings) {
-            return $bindings[$className] ?? null;
-        });
-    }
+	/**
+	 * Bind instances (singletons) to interface classes so they can be resolved
+	 * through the dependency injector.
+	 *
+	 * @param array<string, object> $bindings
+	 * @return void
+	 */
+	protected function bindInterfaces(array $bindings): void
+	{
+		Reflection::interfaceFactory(function (string $className) use ($bindings) {
+			$instance = $bindings[$className] ?? null;
+			if (is_callable($instance)) {
+				$instance = $instance();
+			}
+			return $instance;
+		});
+	}
 
-    /**
-     * Get the expected body (stream)
-     *
-     * @param StreamInterface|null $stream
-     * @return StreamInterface
-     */
-    protected function getBody(?StreamInterface $stream): StreamInterface
-    {
-        if($stream === null) {
-            return new Stream($this->isCli() ? Stream::STDOUT : Stream::TEMP);
-        }
-        return $stream;
-    }
+	/**
+	 * Get the expected body (stream)
+	 *
+	 * @param StreamInterface|null $stream
+	 * @return StreamInterface
+	 */
+	protected function getBody(?StreamInterface $stream): StreamInterface
+	{
+		if ($stream === null) {
+			return new Stream($this->isCli() ? Stream::STDOUT : Stream::TEMP);
+		}
+		return $stream;
+	}
 
-    /**
-     * Check if is inside a command line interface (CLI)
-     *
-     * @return bool
-     */
-    protected function isCli(): bool
-    {
-        return PHP_SAPI === 'cli';
-    }
+	/**
+	 * Check if is inside a command line interface (CLI)
+	 *
+	 * @return bool
+	 */
+	protected function isCli(): bool
+	{
+		return PHP_SAPI === 'cli';
+	}
 
-    /**
-     * Get emitter based on a platform
-     *
-     * @return EmitterInterface
-     */
-    protected function createEmitter(): EmitterInterface
-    {
-        return $this->isCli() ? new CliEmitter() : new HttpEmitter();
-    }
+	/**
+	 * Get emitter based on a platform
+	 *
+	 * @return EmitterInterface
+	 */
+	protected function createEmitter(): EmitterInterface
+	{
+		return $this->isCli() ? new CliEmitter() : new HttpEmitter();
+	}
 }

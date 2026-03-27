@@ -29,6 +29,10 @@ class HttpEmitter implements EmitterInterface
 	        || ($status >= 100 && $status < 200)
 	        || $method === 'HEAD';
 
+	    if(!$response->hasHeader('Content-Type')) {
+		    $response = $response->withHeader('Content-Type', 'text/html; charset=UTF-8');
+	    }
+
 	    // Create headers
         $this->createHeaders($response);
 
